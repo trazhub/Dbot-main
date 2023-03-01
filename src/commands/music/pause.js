@@ -1,30 +1,44 @@
-const Discord = require('discord.js');
+const { MessageEmbed } = require("discord.js");
 
-module.exports = async (client, interaction, args) => {
-    const player = client.player.players.get(interaction.guild.id);
+module.exports = {
+    name: "pause",
+    category: "Music",
+    description: "Pause the currently playing music",
+    args: false,
+    usage: "",
+    userPrams: [],
+    botPrams: ["EMBED_LINKS"],
+    dj: true,
+    owner: false,
+    player: true,
+    inVoiceChannel: true,
+    sameVoiceChannel: true,
+    execute: async (message, args, client, prefix) => {
+        const player = client.manager.players.get(message.guild.id);
 
-    const channel = interaction.member.voice.channel;
-    if (!channel) return client.errNormal({
-        error: `You're not in a voice channel!`,
-        type: 'editreply'
-    }, interaction);
+        if (!player.current) {
+            let thing = new MessageEmbed()
+                .setColor("RED")
+                .setDescription("There is no music playing.");
+            return message.reply({ embeds: [thing] });
+        }
 
-    if (player && (channel.id !== player?.voiceChannel)) return client.errNormal({
-        error: `You're not in the same voice channel!`,
-        type: 'editreply'
-    }, interaction);
+        const emojipause = client.emoji.pause;
 
-    if (!player || !player.queue.current) return client.errNormal({
-        error: "There are no songs playing in this server",
-        type: 'editreply'
-    }, interaction);
+        if (player.player.paused) {
+            let thing = new MessageEmbed()
+                .setColor("RED")
+                .setDescription(`${emojipause} The player is already paused.`);
+            return message.reply({ embeds: [thing] });
+        }
 
-    player.pause(true)
+        await player.setPaused(true);
 
-    client.succNormal({
-        text: `Paused the music!`,
-        type: 'editreply'
-    }, interaction);
-}
+        const song = player.current;
 
-// © Dotwood Media | All rights reserved
+        let thing = new MessageEmbed()
+            .setColor(client.embedColor)
+            .setDescription(`${emojipause} **Paused**\n[${song.title}](${song.uri})`);
+        return message.reply({ embeds: [thing] });
+    },
+};

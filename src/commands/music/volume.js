@@ -1,47 +1,63 @@
-const Discord = require('discord.js');
+const { MessageEmbed } = require('discord.js');
+const Wait = require('util').promisify(setTimeout);
+module.exports = {
+  name: 'volume',
+  aliases: ['v', 'vol'],
+  category: 'Music',
+  description: 'Change volume of currently playing music',
+  args: false,
+  usage: '',
+  userPrams: [],
+  botPrams: ['EMBED_LINKS'],
+  dj: true,
+  owner: false,
+  player: true,
+  inVoiceChannel: true,
+  sameVoiceChannel: true,
+  execute: async (message, args, client, prefix) => {
+    const player = client.manager.players.get(message.guild.id);
 
-module.exports = async (client, interaction, args) => {
-    const player = client.player.players.get(interaction.guild.id);
+    if (!player.current) {
+      let thing = new MessageEmbed().setColor('RED').setDescription('There is no music playing.');
+      return message.reply({ embeds: [thing] });
+    }
+    const volumeEmoji = client.emoji.volumehigh;
 
-    const channel = interaction.member.voice.channel;
-    if (!channel) return client.errNormal({
-        error: `You're not in a voice channel!`,
-        type: 'editreply'
-    }, interaction);
+    if (!args.length) {
+      let thing = new MessageEmbed()
+        .setColor(client.embedColor)
+        .setDescription(`Player Current Volume: \`[ ${player.player.filters.volume * 100}% ]\``);
+      return message.reply({ embeds: [thing] });
+    }
 
-    if (player && (channel.id !== player?.voiceChannel)) return client.errNormal({
-        error: `You're not in the same voice channel!`,
-        type: 'editreply'
-    }, interaction);
+    const volume = Number(args[0]);
 
-    if (!player || !player.queue.current) return client.errNormal({
-        error: "There are no songs playing in this server",
-        type: 'editreply'
-    }, interaction);
+    if (!volume || volume < 0 || volume > 100) {
+      let thing = new MessageEmbed()
+        .setColor('RED')
+        .setDescription(`Usage: ${prefix}volume <Number of volume between 0 - 100>`);
+      return message.reply({ embeds: [thing] });
+    }
 
-    let amount = interaction.options.getNumber('amount');
-
-    if (!amount) return client.simpleEmbed({
-        desc: `${client.emotes.normal.volume}┆Current volume is **${player.volume}%**`,
-        type: 'editreply'
-    }, interaction);
-
-    if (isNaN(amount) || amount === 'Infinity') return client.errNormal({
-        text: `Please enter a valid number!`,
-        type: 'editreply'
-    }, interaction);
-
-    if (Math.round(parseInt(amount)) < 1 || Math.round(parseInt(amount)) > 1000) return client.errNormal({
-        text: "Volume cannot exceed 1000%",
-        type: 'editreply'
-    }, interaction);
-
-    player.setVolume(parseInt(amount))
-
-    client.succNormal({
-        text: `Volume set to **${amount}%**`,
-        type: 'editreply'
-    }, interaction);
-}
-
-// © Dotwood Media | All rights reserved
+    await player.setVolume(volume / 1);
+    Wait(500);
+    if (volume > player.volume) {
+      var emojivolume = client.emoji.volumehigh;
+      let thing = new MessageEmbed()
+        .setColor(client.embedColor)
+        .setDescription(`${emojivolume} Volume set to: \`[ ${volume}% ]\``);
+      return message.reply({ embeds: [thing] });
+    } else if (volume < player.volume) {
+      var emojivolume = message.client.emoji.volumelow;
+      let thing = new MessageEmbed()
+        .setColor(client.embedColor)
+        .setDescription(`${emojivolume} Volume set to: \`[ ${volume}% ]\``);
+      return message.reply({ embeds: [thing] });
+    } else {
+      let thing = new MessageEmbed()
+        .setColor(client.embedColor)
+        .setDescription(`${volumeEmoji} Volume set to: \`[ ${volume}% ]\``);
+      return message.reply({ embeds: [thing] });
+    }
+  },
+};

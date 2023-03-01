@@ -1,30 +1,43 @@
-const Discord = require('discord.js');
+const { MessageEmbed } = require('discord.js');
 
-module.exports = async (client, interaction, args) => {
-    const player = client.player.players.get(interaction.guild.id);
+module.exports = {
+  name: 'skip',
+  aliases: ['s'],
+  category: 'Music',
+  description: 'To skip the current playing song.',
+  args: false,
+  usage: '',
+  userPrams: [],
+  botPrams: ['EMBED_LINKS'],
+  dj: true,
+  owner: false,
+  player: true,
+  inVoiceChannel: true,
+  sameVoiceChannel: true,
+  execute: async (message, args, client, prefix) => {
+    const player = client.manager.players.get(message.guild.id);
+    if (!player.current) {
+      let thing = new MessageEmbed().setColor('RED').setDescription('There is no music playing.');
+      return message.reply({ embeds: [thing] });
+    }
+    if (player.queue.length == 0) {
+      let noskip = new MessageEmbed()
+        .setColor(client.embedColor)
+        .setDescription(`No more songs left in the queue to skip.`);
+      return message.reply({ embeds: [noskip] });
+    }
 
-    const channel = interaction.member.voice.channel;
-    if (!channel) return client.errNormal({
-        error: `You're not in a voice channel!`,
-        type: 'editreply'
-    }, interaction);
+    await player.player.stopTrack();
 
-    if (player && (channel.id !== player?.voiceChannel)) return client.errNormal({
-        error: `You're not in the same voice channel!`,
-        type: 'editreply'
-    }, interaction);
+    const emojiskip = client.emoji.skip;
 
-    if (!player || !player.queue.current) return client.errNormal({
-        error: "There are no songs playing in this server",
-        type: 'editreply'
-    }, interaction);
-
-    player.stop();
-
-    client.succNormal({
-        text: `Skipped the music!`,
-        type: 'editreply'
-    }, interaction);
-}
-
-// © Dotwood Media | All rights reserved
+    let thing = new MessageEmbed()
+      .setDescription(`${emojiskip} **Skipped**\n[${player.current.title}](${player.current.uri})`)
+      .setColor(client.embedColor);
+    return message.reply({ embeds: [thing] }).then((msg) => {
+      setTimeout(() => {
+        msg.delete();
+      }, 3000);
+    });
+  },
+};

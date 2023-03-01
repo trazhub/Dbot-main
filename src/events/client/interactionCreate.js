@@ -1,184 +1,113 @@
-const Discord = require('discord.js');
-const Captcha = require("@haileybot/captcha-generator");
+const { Permissions } = require('discord.js');
+const db = require('../../schema/setup');
+const db2 = require("../../schema/dj");
 
-const reactionSchema = require("../../database/models/reactionRoles");
-const banSchema = require("../../database/models/userBans");
-const verify = require("../../database/models/verify");
-
-module.exports = async (client, interaction) => {
-    // Commands
+module.exports = {
+  name: 'interactionCreate',
+  run: async (client, interaction) => {
     if (interaction.isCommand() || interaction.isContextMenu()) {
-        await interaction.deferReply({ fetchReply: true });
+      const SlashCommands = client.slashCommands.get(interaction.commandName);
+      if (!SlashCommands) return;
 
-        banSchema.findOne({ User: interaction.user.id }, async (err, data) => {
-            if (data) {
-                return client.errNormal({
-                    error: "You have been banned by the developers of this bot",
-                    type: 'ephemeraledit'
-                }, interaction);
-            }
-            else {
-                const cmd = client.commands.get(interaction.commandName);
-                if (interaction.options._subcommand !== null && interaction.options.getSubcommand() == "help") {
-                    const commands = interaction.client.commands.filter(x => x.data.name == interaction.commandName).map((x) => x.data.options.map((c) => '`' + c.name + '` - ' + c.description).join("\n"));
+      if (!interaction.guild.me.permissions.has(Permissions.FLAGS.SEND_MESSAGES))
+        return await interaction.user.dmChannel
+          .send({
+            content: `I don't have **\`SEND_interactionS\`** permission in <#${interaction.channelId}> to execute this **\`${SlashCommands.name}\`** command.`,
+          })
+          .catch(() => { });
 
-                    return client.embed({
-                        title: `❓・Help panel`,
-                        desc: `Get help with the commands in \`${interaction.commandName}\` \n\n${commands}`,
-                        type: 'editreply'
-                    }, interaction)
-                }
+      if (!interaction.guild.me.permissions.has(Permissions.FLAGS.VIEW_CHANNEL)) return;
 
-                cmd.run(client, interaction, interaction.options._hoistedOptions).catch(err => {
-                    client.emit("errorCreate", err, interaction.commandName, interaction)
-                })
-            }
+      if (!interaction.guild.me.permissions.has(Permissions.FLAGS.EMBED_LINKS))
+        return await interaction
+          .reply({
+            content: `I don't have **\`EMBED_LINKS\`** permission to execute this **\`${SlashCommands.name}\`** command.`,
+            ephemeral: true,
+          })
+          .catch(() => { });
+      const player = interaction.client.manager.players.get(interaction.guildId);
+      if (SlashCommands.player && !player) {
+        return await interaction.reply({
+          content: `There is no player for this guild.`,
+          ephemeral: true,
         })
-    }
-
-    // Verify system
-    if (interaction.isButton() && interaction.customId == "dbot_verify") {
-        const data = await verify.findOne({ Guild: interaction.guild.id, Channel: interaction.channel.id });
+          .catch(() => { });
+      }
+      if (!interaction.member.permissions.has(SlashCommands.botPrams || [])) {
+        return await interaction.reply({
+          content: `I Need Permission to Work this \`${SlashCommands.botPrams.join(', ')}\``,
+          ephemeral: true,
+        });
+      }
+      if (!interaction.guild.me.permissions.has(SlashCommands.userPrams || [])) {
+        return await interaction.reply({
+          content: `You Need this \`${SlashCommands.userPrams.join(
+            ', ',
+          )}\` Permission to Work this command!`,
+          ephemeral: true,
+        });
+      }
+      if (SlashCommands.inVoiceChannel && !interaction.member.voice.channel) {
+        return await interaction
+          .reply({
+            content: `You must be in a voice channel!`,
+            ephemeral: true,
+          })
+          .catch(() => { });
+      }
+      if (SlashCommands.sameVoiceChannel) {
+        if (interaction.guild.me.voice.channel) {
+          if (interaction.guild.me.voice.channelId !== interaction.member.voice.channelId) {
+            return await interaction
+              .reply({
+                content: `You must be in the same channel as ${interaction.client.user}`,
+                ephemeral: true,
+              })
+              .catch(() => { });
+          }
+        }
+      }
+      if (SlashCommands.dj) {
+        let data = await db2.findOne({ Guild: interaction.guildId })
+        let perm = Permissions.FLAGS.MANAGE_GUILD;
         if (data) {
-            let captcha = new Captcha();
-
-            try {
-                var image = new Discord.MessageAttachment(captcha.JPEGStream, "captcha.jpeg");
-
-                interaction.reply({ files: [image], fetchReply: true }).then(function (msg) {
-                    const filter = s => s.author.id == interaction.user.id;
-
-                    interaction.channel.awaitMessages({ filter, max: 1 }).then(response => {
-                        if (response.first().content === captcha.value) {
-                            response.first().delete();
-                            msg.delete();
-
-                            client.succNormal({
-                                text: "You have been successfully verified!"
-                            }, interaction.user).catch(error => { })
-
-                            var verifyUser = interaction.guild.members.cache.get(interaction.user.id);
-                            verifyUser.roles.add(data.Role);
-                        }
-                        else {
-                            response.first().delete();
-                            msg.delete();
-
-                            client.errNormal({
-                                error: "You have answered the captcha incorrectly!",
-                                type: 'editreply'
-                            }, interaction).then(msgError => {
-                                setTimeout(() => {
-                                    msgError.delete();
-                                }, 2000)
-                            })
-                        }
-                    })
-                })
-            }
-            catch (error) {
-                throw error;
-            }
-        }
-        else {
-            client.errNormal({
-                error: "Verify is disabled in this server! Or you are using the wrong channel!",
-                type: 'ephemeral'
-            }, interaction);
-        }
-    }
-
-    // Reaction roles button
-    if (interaction.isButton()) {
-        var buttonID = interaction.customId.split("-");
-
-        if (buttonID[0] == "reaction_button") {
-            reactionSchema.findOne({ Message: interaction.message.id }, async (err, data) => {
-                if (!data) return;
-
-                const [roleid] = data.Roles[buttonID[1]];
-
-                if (interaction.member.roles.cache.get(roleid)) {
-                    interaction.guild.members.cache.get(interaction.user.id).roles.remove(roleid).catch(error => { })
-
-                    interaction.reply({ content: `<@&${roleid}> was removed!`, ephemeral: true });
-                }
-                else {
-                    interaction.guild.members.cache.get(interaction.user.id).roles.add(roleid).catch(error => { })
-
-                    interaction.reply({ content: `<@&${roleid}> was added!`, ephemeral: true });
-                }
+          if (data.Mode) {
+            let pass = false;
+            if (data.Roles.length > 0) {
+              interaction.member.roles.cache.forEach((x) => {
+                let role = data.Roles.find((r) => r === x.id);
+                if (role) pass = true;
+              });
+            };
+            if (!pass && !interaction.member.permissions.has(perm)) return await interaction.reply({ content: `You don't have permission or dj role to use this command`, ephemeral: true })
+          };
+        };
+      };
+      try {
+        await SlashCommands.run(client, interaction);
+      } catch (error) {
+        if (interaction.replied) {
+          await interaction
+            .editReply({
+              content: `An unexcepted error occured.`,
             })
+            .catch(() => { });
+        } else {
+          await interaction
+            .followUp({
+              ephemeral: true,
+              content: `An unexcepted error occured.`,
+            })
+            .catch(() => { });
         }
+        console.error(error);
+      }
     }
+    if (interaction.isButton()) {
+      let data = await db.findOne({ Guild: interaction.guildId });
+      if (data && interaction.channelId === data.Channel && interaction.message.id === data.Message) return client.emit("playerButtons", interaction, data);
+    };
+  }
+};
 
-    // Reaction roles select
-    if (interaction.isSelectMenu()) {
-        if (interaction.customId == "reaction_select") {
-            reactionSchema.findOne(
-                { Message: interaction.message.id },
-                async (err, data) => {
-                    if (!data) return;
 
-                    let roles = "";
-
-                    for (let i = 0; i < interaction.values.length; i++) {
-                        const [roleid] = data.Roles[interaction.values[i]];
-
-                        roles += `<@&${roleid}> `;
-
-                        if (interaction.member.roles.cache.get(roleid)) {
-                            interaction.guild.members.cache
-                                .get(interaction.user.id)
-                                .roles.remove(roleid)
-                                .catch((error) => { });
-                        } else {
-                            interaction.guild.members.cache
-                                .get(interaction.user.id)
-                                .roles.add(roleid)
-                                .catch((error) => { });
-                        }
-
-                        if ((i + 1) === interaction.values.length) {
-                            interaction.reply({
-                                content: `I have updated the following roles for you: ${roles}`,
-                                ephemeral: true,
-                            });
-                        }
-                    }
-                }
-            );
-        }
-    }
-
-    // Tickets
-    if (interaction.customId == "dbot_openticket") {
-        return require(`${process.cwd()}/src/commands/tickets/create.js`)(client, interaction);
-    }
-
-    if (interaction.customId == "dbot_closeticket") {
-        return require(`${process.cwd()}/src/commands/tickets/close.js`)(client, interaction);
-    }
-
-    if (interaction.customId == "dbot_claimTicket") {
-        return require(`${process.cwd()}/src/commands/tickets/claim.js`)(client, interaction);
-    }
-
-    if (interaction.customId == "dbot_transcriptTicket") {
-        return require(`${process.cwd()}/src/commands/tickets/transcript.js`)(client, interaction);
-    }
-
-    if (interaction.customId == "dbot_openTicket") {
-        return require(`${process.cwd()}/src/commands/tickets/open.js`)(client, interaction);
-    }
-
-    if (interaction.customId == "dbot_deleteTicket") {
-        return require(`${process.cwd()}/src/commands/tickets/delete.js`)(client, interaction);
-    }
-
-    if (interaction.customId == "dbot_noticeTicket") {
-        return require(`${process.cwd()}/src/commands/tickets/notice.js`)(client, interaction);
-    }
-}
-
-// © Dotwood Media | All rights reserved

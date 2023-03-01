@@ -1,32 +1,44 @@
-const Discord = require('discord.js');
+const { MessageEmbed } = require('discord.js');
 
-module.exports = async (client, interaction, args) => {
-    const player = client.player.players.get(interaction.guild.id);
+module.exports = {
+  name: 'skipto',
+  aliases: ['jump'],
+  category: 'Music',
+  description: 'Forward song',
+  args: true,
+  usage: '<Number of song in queue>',
+  userPrams: [],
+  botPrams: ['EMBED_LINKS'],
+  dj: true,
+  owner: false,
+  player: true,
+  inVoiceChannel: true,
+  sameVoiceChannel: true,
+  execute: async (message, args, client, prefix) => {
+    const player = client.manager.players.get(message.guild.id);
 
-    const channel = interaction.member.voice.channel;
-    if (!channel) return client.errNormal({
-        error: `You're not in a voice channel!`,
-        type: 'editreply'
-    }, interaction);
+    if (!player.current) {
+      let thing = new MessageEmbed().setColor('RED').setDescription('There is no music playing.');
+      return message.reply({ embeds: [thing] });
+    }
 
-    if (player && (channel.id !== player?.voiceChannel)) return client.errNormal({
-        error: `You're not in the same voice channel!`,
-        type: 'editreply'
-    }, interaction);
+    const position = Number(args[0]);
 
-    if (!player || !player.queue.current) return client.errNormal({
-        error: "There are no songs playing in this server",
-        type: 'editreply'
-    }, interaction);
+    if (!position || position < 0 || position > player.queue.length) {
+      let thing = new MessageEmbed()
+        .setColor('RED')
+        .setDescription(`Usage: ${message.client.prefix}skipto <Number of song in queue>`);
+      return message.reply({ embeds: [thing] });
+    }
+    if (args[0] == 1) player.player.stopTrack();
+    player.queue.splice(0, position - 1);
+    await player.player.stopTrack();
 
-    let number = interaction.options.getNumber('number');
+    const emojijump = client.emoji.jump;
 
-    player.skipto(parseInt(number))
-
-    client.succNormal({ 
-        text: `Skipped the music to **${number}**`, 
-        type: 'editreply'
-    }, interaction);
-}
-
-// © Dotwood Media | All rights reserved
+    let thing = new MessageEmbed()
+      .setDescription(`${emojijump} Forward **${position}** Songs`)
+      .setColor(client.embedColor);
+    return message.reply({ embeds: [thing] });
+  },
+};

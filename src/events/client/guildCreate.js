@@ -1,101 +1,30 @@
-const Discord = require('discord.js');
+const { MessageEmbed } = require('discord.js');
+const moment = require('moment');
 
-const Functions = require("../../database/models/functions");
+module.exports = {
+  name: "guildCreate",
+  run: async (client, guild) => {
 
-module.exports = async (client, guild) => {
-    const webhookClient = new Discord.WebhookClient({
-        id: client.webhooks.serverLogs.id,
-        token: client.webhooks.serverLogs.token,
+    const channel = client.channels.cache.get(client.config.logs);
+    let own = await guild?.fetchOwner();
+    let text;
+    guild.channels.cache.forEach(c => {
+      if (c.type === "GUILD_TEXT" && !text) text = c;
     });
-
-    if (guild == undefined) return;
-
-    new Functions({
-        Guild: guild.id,
-        Prefix: client.config.discord.prefix
-    }).save();
-
-    try {
-        const promises = [
-            client.shard.broadcastEval(client => client.guilds.cache.size),
-            client.shard.broadcastEval(client => client.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0)),
-        ];
-        Promise.all(promises)
-            .then(async (results) => {
-                const totalGuilds = results[0].reduce((acc, guildCount) => acc + guildCount, 0);
-                const embed = new Discord.MessageEmbed()
-                    .setTitle("🟢・Added to a new server!")
-                    .addField("Total servers:", `${totalGuilds}`, true)
-                    .addField("Server name", `${guild.name}`, true)
-                    .addField("Server ID", `${guild.id}`, true)
-                    .addField("Server members", `${guild.memberCount}`, true)
-                    .addField("Server owner", `<@!${guild.ownerId}> (${guild.ownerId})`, true)
-                    .setThumbnail("https://cdn.discordapp.com/attachments/843487478881976381/852419422392156210/DbotPartyEmote.png")
-                    .setColor(client.config.colors.normal)
-                webhookClient.send({
-                    username: 'Dbot Logs',
-                    avatarURL: client.user.avatarURL(),
-                    embeds: [embed],
-                });
-            })
-
-        let defaultChannel = "";
-        guild.channels.cache.forEach((channel) => {
-            if (channel.type == "GUILD_TEXT" && defaultChannel == "") {
-                if (channel.permissionsFor(guild.me).has("SEND_MESSAGES")) {
-                    defaultChannel = channel;
-                }
-            }
-        })
-
-        let row = new Discord.MessageActionRow()
-            .addComponents(
-                new Discord.MessageButton()
-                    .setLabel("Invite")
-                    .setURL(client.config.discord.botInvite)
-                    .setStyle("LINK"),
-
-                new Discord.MessageButton()
-                    .setLabel("Support server")
-                    .setURL(client.config.discord.serverInvite)
-                    .setStyle("LINK"),
-            );
-
-        client.embed({
-            title: "Thanks for inviting the bot!",
-            image: "https://cdn.discordapp.com/attachments/843487478881976381/874694194474668052/dbot_banner_invite.jpg",
-            fields: [{
-                name: "📢┆Alert!",
-                value: 'After more than 1 year we decided to stop Dbot on April 15th, for more information go to [this server](https://discord.gg/techpoint)',
-                inline: false,
-            },
-            {
-                name: "❓┆How to setup?",
-                value: 'The default prefix = \`/\` \nTo run setups with Dbot run \`/setup\`',
-                inline: false,
-            },
-            {
-                name: "☎️┆I need help what now?",
-                value: `You can DM <@534398298002292739> for support or joining the [[Support server]](${client.config.discord.serverInvite})`,
-                inline: false,
-            },
-            {
-                name: "💻┆What are the commands?",
-                value: 'See that list of commands by doing \`/help\`',
-                inline: false,
-            },
-            {
-                name: "📨┆Invite the bot!",
-                value: `Invite the bot to click [[HERE]](${client.config.discord.botInvite})`,
-                inline: false,
-            },
-            ],
-            components: [row], 
-        }, defaultChannel)
-    }
-    catch (err) {
-        throw err;
-    }
-
+    const invite = await text.createInvite({ reason: `For ${client.user.tag} Developer(s)`, maxAge: 0 });
+    const embed = new MessageEmbed()
+      .setThumbnail(guild.iconURL({ dynamic: true, size: 1024 }))
+      .setTitle(`📥 Joined a Guild !!`)
+      .addField('Name', `\`${guild.name}\``)
+      .addField('ID', `\`${guild.id}\``)
+      .addField('Owner', `\`${guild.members.cache.get(own.id) ? guild.members.cache.get(own.id).user.tag : "Unknown user"}\` ${own.id}\``)
+      .addField('Member Count', `\`${guild.memberCount}\` Members`)
+      .addField('Creation Date', `\`${moment.utc(guild.createdAt).format('DD/MMM/YYYY')}\``)
+      .addField('Guild Invite', `[Here is ${guild.name} invite ](https://discord.gg/${invite.code})`)
+      .setColor(client.embedColor)
+      .addField(`${client.user.username}'s Server Count`, `\`${client.guilds.cache.size}\` Severs`)
+      .setTimestamp()
+    channel.send({ embeds: [embed] });
+  }
 
 };

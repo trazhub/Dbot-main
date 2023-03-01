@@ -1,38 +1,44 @@
-const Discord = require('discord.js');
+const { MessageEmbed } = require('discord.js');
 
-module.exports = async (client, interaction, args) => {
-    const player = client.player.players.get(interaction.guild.id);
-    
-    const channel = interaction.member.voice.channel;
-    if (!channel) return client.errNormal({
-        error: `You're not in a voice channel!`,
-        type: 'editreply'
-    }, interaction);
+module.exports = {
+  name: 'remove',
+  category: 'Music',
+  description: 'Remove song from the queue',
+  args: true,
+  usage: '<Number of song in queue>',
+  userPrams: [],
+  botPrams: ['EMBED_LINKS'],
+  dj: true,
+  owner: false,
+  player: true,
+  inVoiceChannel: true,
+  sameVoiceChannel: true,
+  execute: async (message, args, client, prefix) => {
+    const player = client.manager.players.get(message.guild.id);
 
-    if (player && (channel.id !== player?.voiceChannel)) return client.errNormal({
-        error: `You're not in the same voice channel!`,
-        type: 'editreply'
-    }, interaction);
+    if (!player.current) {
+      let thing = new MessageEmbed().setColor('RED').setDescription('There is no music playing.');
+      return message.reply({ embeds: [thing] });
+    }
 
-    if (!player || !player.queue.current) return client.errNormal({
-        error: "There are no songs playing in this server",
-        type: 'editreply'
-    }, interaction);
+    const position = Number(args[0]) - 1;
+    if (position > player.queue.length) {
+      const number = position + 1;
+      let thing = new MessageEmbed()
+        .setColor('RED')
+        .setDescription(`No songs at number ${number}.\nTotal Songs: ${player.queue.length}`);
+      return message.reply({ embeds: [thing] });
+    }
 
-    let number = interaction.options.getNumber('number');
+    const song = player.queue[position];
 
-    if (number > player.queue.size) return client.errNormal({
-        error: `The queue doesn't have that much songs`,
-        type: 'editreply'
-    }, interaction);
+    await player.queue.splice(position);
 
-    const targetSong = player.queue[parseInt(number - 1)]
-    player.queue.remove((parseInt(number)) - 1)
+    const emojieject = client.emoji.remove;
 
-    client.succNormal({ 
-        text: `Removed **${name}** from the queue`,
-        type: 'editreply'
-    }, interaction);
-}
-
-// © Dotwood Media | All rights reserved
+    let thing = new MessageEmbed()
+      .setColor(client.embedColor)
+      .setDescription(`${emojieject} Removed\n[${song.title}](${song.uri})`);
+    return message.reply({ embeds: [thing] });
+  },
+};

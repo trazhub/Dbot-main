@@ -1,89 +1,67 @@
-const Discord = require('discord.js');
+const { MessageEmbed } = require('discord.js');
+const { convertTime } = require('../../utils/convert.js');
+const ms = require('ms');
 
-const forHumans = require("../../assets/utils/forhumans.js");
+module.exports = {
+  name: 'seek',
+  aliases: [],
+  category: 'Music',
+  description: 'Seek the currently playing song',
+  args: true,
+  usage: '<10s || 10m || 10h>',
+  userPrams: [],
+  botPrams: ['EMBED_LINKS'],
+  dj: true,
+  owner: false,
+  player: true,
+  inVoiceChannel: true,
+  sameVoiceChannel: true,
+  execute: async (message, args, client, prefix) => {
+    const player = client.manager.players.get(message.guild.id);
 
-module.exports = async (client, interaction, args) => {
-    const player = client.player.players.get(interaction.guild.id);
+    if (!player.current) {
+      let thing = new MessageEmbed().setColor('RED').setDescription('There is no music playing.');
+      return message.reply({ embeds: [thing] });
+    }
 
-    const channel = interaction.member.voice.channel;
-    if (!channel) return client.errNormal({
-        error: `You're not in a voice channel!`,
-        type: 'editreply'
-    }, interaction);
+    const time = ms(args[0]);
+    const position = player.player.position;
+    const duration = player.current.length;
 
-    if (player && (channel.id !== player?.voiceChannel)) return client.errNormal({
-        error: `You're not in the same voice channel!`,
-        type: 'editreply'
-    }, interaction);
+    const emojiforward = client.emoji.forward;
+    const emojirewind = client.emoji.rewind;
 
-    if (!player || !player.queue.current) return client.errNormal({
-        error: "There are no songs playing in this server",
-        type: 'editreply'
-    }, interaction);
+    const song = player.current;
 
-    let number = interaction.options.getNumber('time');
-    player.seek(Number(number) * 1000);
-
-    const musicLength = (player.queue.current.isStream ? null : ((!player.queue.current || !player.queue.current.duration || isNaN(player.queue.current.duration)) ? null : player.queue.current.duration))
-    const nowTime = (!player.position || isNaN(player.position)) ? null : player.position;
-
-    const bar = await createProgressBar(musicLength, nowTime);
-
-    client.succNormal({
-        text: `Seeked song to: ${format(Number(number) * 1000)}`,
-        fields: [
-            {
-                name: `${client.emotes.normal.music}┆Progress`,
-                value: `${new Date(player.position).toISOString().slice(11, 19)} ┃ ` +
-                    bar +
-                    ` ┃ ${new Date(player.queue.current.duration).toISOString().slice(11, 19)}`,
-                inline: false
-            }
-        ],
-        type: 'editreply'
-    }, interaction)
-}
-
-async function createProgressBar(total, current, size = 10, line = '▬', slider = '🔘') {
-    if (current > total) {
-        const bar = line.repeat(size + 2);
-        const percentage = (current / total) * 100;
-        return [bar, percentage];
+    if (time <= duration) {
+      if (time > position) {
+        await player.player.seekTo(time);
+        let thing = new MessageEmbed()
+          .setDescription(
+            `${emojiforward} **Forward**\n[${song.title}](${song.uri})\n\`${convertTime(
+              time,
+            )} / ${convertTime(duration)}\``,
+          )
+          .setColor(client.embedColor);
+        return message.reply({ embeds: [thing] });
+      } else {
+        await player.player.seekTo(time);
+        let thing = new MessageEmbed()
+          .setDescription(
+            `${emojirewind} **Rewind**\n[${song.title}](${song.uri})\n\`${convertTime(
+              time,
+            )} / ${convertTime(duration)}\``,
+          )
+          .setColor(client.embedColor);
+        return message.reply({ embeds: [thing] });
+      }
     } else {
-        const percentage = current / total;
-        const progress = Math.round((size * percentage));
-
-        if (progress > 1 && progress < 10) {
-            const emptyProgress = size - progress;
-            const progressText = line.repeat(progress).replace(/.$/, slider);
-            const emptyProgressText = line.repeat(emptyProgress);
-            const bar = progressText + emptyProgressText;
-            return [bar];
-        }
-        else if (progress < 1 || progress == 1) {
-            const emptyProgressText = line.repeat(9);
-            const bar = "🔘" + emptyProgressText;
-            return [bar];
-        }
-
-        else if (progress > 10 || progress == 10) {
-            const emptyProgressText = line.repeat(9);
-            const bar = emptyProgressText + "🔘";
-            return [bar];
-        }
+      let thing = new MessageEmbed()
+        .setColor('RED')
+        .setDescription(
+          `Seek duration exceeds Song duration.\nSong duration: \`${convertTime(duration)}\``,
+        );
+      return message.reply({ embeds: [thing] });
     }
-}
-
-function format(millis) {
-    try {
-        var h = Math.floor(millis / 3600000),
-            m = Math.floor(millis / 60000),
-            s = ((millis % 60000) / 1000).toFixed(0);
-        if (h < 1) return (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s ;
-        else return (h < 10 ? "0" : "") + h + ":" + (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
-    } catch (e) {
-        console.log(String(e.stack).bgRed)
-    }
-}
-
-// © Dotwood Media | All rights reserved
+  },
+};

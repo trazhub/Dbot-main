@@ -1,30 +1,42 @@
-const Discord = require('discord.js');
+const { MessageEmbed } = require('discord.js');
 
-module.exports = async (client, interaction, args) => {
-    const player = client.player.players.get(interaction.guild.id);
-    
-    const channel = interaction.member.voice.channel;
-    if (!channel) return client.errNormal({
-        error: `You're not in a voice channel!`,
-        type: 'editreply'
-    }, interaction);
+module.exports = {
+  name: 'resume',
+  aliases: ['r'],
+  category: 'Music',
+  description: 'Resume currently playing music',
+  args: false,
+  usage: '<Number of song in queue>',
+  userPrams: [],
+  botPrams: ['EMBED_LINKS'],
+  dj: true,
+  owner: false,
+  player: true,
+  inVoiceChannel: true,
+  sameVoiceChannel: true,
+  execute: async (message, args, client, prefix) => {
+    const player = client.manager.players.get(message.guild.id);
+    const song = player.current;
 
-    if (player && (channel.id !== player?.voiceChannel)) return client.errNormal({
-        error: `You're not in the same voice channel!`,
-        type: 'editreply'
-    }, interaction);
+    if (!player.current) {
+      let thing = new MessageEmbed().setColor('RED').setDescription('There is no music playing.');
+      return message.reply({ embeds: [thing] });
+    }
 
-    if (!player || !player.queue.current) return client.errNormal({
-        error: "There are no songs playing in this server",
-        type: 'editreply'
-    }, interaction);
+    const emojiresume = client.emoji.resume;
 
-    player.pause(false)
+    if (!player.player.paused) {
+      let thing = new MessageEmbed()
+        .setColor('RED')
+        .setDescription(`${emojiresume} The player is already **resumed**.`);
+      return message.reply({ embeds: [thing] });
+    }
 
-    client.succNormal({
-        text: `Resumed the music!`,
-        type: 'editreply'
-    }, interaction);
-}
+    await player.setPaused(false);
 
-// © Dotwood Media | All rights reserved
+    let thing = new MessageEmbed()
+      .setDescription(`${emojiresume} **Resumed**\n[${song.title}](${song.uri})`)
+      .setColor(client.embedColor);
+    return message.reply({ embeds: [thing] });
+  },
+};
